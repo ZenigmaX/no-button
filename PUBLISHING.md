@@ -44,3 +44,31 @@ python3 scripts/build_web.py      # needs Pillow; makes dist/ (offline PWA) + NO
 ```
 To host dist/ permanently for free, you need a free account on one of these: GitHub Pages, Cloudflare Pages, or Netlify. For example:
 `npx netlify-cli login && npx netlify-cli deploy --dir dist --prod`. It must be served from the root of a domain.
+
+## iMessage app (Messages drawer)
+
+The project includes an iMessage extension in `targets/messages/`, built with `@bacons/apple-targets` and
+`plugins/withMessagesExtensionType.js`:
+- Target `NOButtonMessages`, bundle id `com.eugeneproskuryn.nobutton.messages`, iOS 15.1+, Swift `MessagesViewController` (MSMessagesAppViewController).
+- **Voices** tab: 12 buttons. Tapping one plays a preview and puts that voice's MP4 clip into the message field (`insertAttachment`), so the recipient hears the scream.
+- **Stickers** tab: 12 animated APNG stickers (408×408, about 230 KB each). Tap to send, or peel one onto a bubble. Stickers are silent.
+- Icons: `Assets.xcassets/iMessage App Icon.stickersiconset` (all Messages sizes, including 1024×768).
+- Apple allows only one Messages extension per app, so the stickers and the voice picker share this one extension.
+
+No Mac is needed. EAS Build compiles both targets in the cloud, and `ios/` is generated (`npx expo prebuild`), so it isn't committed.
+
+### Steps
+1. Apple Developer Program, $99/year.
+2. `eas build -p ios --profile production`. The first run asks you to sign in with your Apple ID. EAS then registers both bundle ids
+   (`com.eugeneproskuryn.nobutton` and `com.eugeneproskuryn.nobutton.messages`) and creates certificates and provisioning profiles for both
+   targets (read from `extra.eas.build.experimental.ios.appExtensions`, which the plugin fills in).
+3. `eas submit -p ios --latest` uploads the build to App Store Connect. Test it with **TestFlight** first: install it on your iPhone,
+   open Messages, tap the apps (+) button, then **NO Button**.
+4. In App Store Connect, add the iMessage screenshots (iPhone Messages screenshots are required for apps with an iMessage extension),
+   then submit the app for review. Once approved, the iMessage app is **listed in the iMessage App Store automatically** as part of the same app.
+   No separate submission.
+
+### Regenerating assets
+- `python3 scripts/make_clips.py`: MP4 clips (assets/clips). Copy them to `targets/messages/Resources/clips/` as well.
+- `python3 scripts/make_stickers.py`: APNG stickers in `targets/messages/Resources/stickers/`.
+- Swift syntax check without a Mac (Linux swiftc + stubs): see `scripts/swift-stubs/`.

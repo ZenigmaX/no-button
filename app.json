@@ -13,6 +13,7 @@
       "backgroundColor": "#141414"
     },
     "plugins": [
+      "./plugins/withMessagesExtensionType",
       [
         "expo-splash-screen",
         {
@@ -23,7 +24,8 @@
       ],
       "expo-av",
       "expo-asset",
-      "expo-sharing"
+      "expo-sharing",
+      "@bacons/apple-targets"
     ],
     "ios": {
       "supportsTablet": true,
