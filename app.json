@@ -22,7 +22,8 @@
         }
       ],
       "expo-av",
-      "expo-asset"
+      "expo-asset",
+      "expo-sharing"
     ],
     "ios": {
       "supportsTablet": true,

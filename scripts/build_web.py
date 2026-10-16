@@ -66,6 +66,9 @@ order = re.findall(r"assets/sounds/(\w+)\.mp3", open('App.tsx').read())
 sdir = os.path.join(D, 'assets/assets/sounds')
 byname = {f.split('.')[0]: f for f in os.listdir(sdir)}
 uris = ['data:audio/mpeg;base64,' + base64.b64encode(open(os.path.join(sdir, byname[n]), 'rb').read()).decode() for n in order]
+cdir = os.path.join(D, 'assets/assets/clips')
+cby = {f.split('.')[0]: f for f in os.listdir(cdir)}
+clips = ['data:video/mp4;base64,' + base64.b64encode(open(os.path.join(cdir, cby[n]), 'rb').read()).decode() for n in order]
 js_src = re.search(r'<script src="([^"]*/_expo/[^"]+)" defer></script>', h).group(1)
 js = open(D + js_src[len(BASE):]).read().replace('</script', '<\\/script')
 ico = 'data:image/png;base64,' + base64.b64encode(open(os.path.join(D, 'apple-touch-icon.png'), 'rb').read()).decode()
@@ -74,6 +77,6 @@ s = re.sub(r'<link rel="(manifest|icon)"[^>]*/>', '', s)
 s = s.replace(f'href="{BASE}/apple-touch-icon.png"', f'href="{ico}"')
 s = s.replace(f'<script src="{js_src}" defer></script>',
               '')
-s = s.replace('</body>', '<script>window.__NO_SOUNDS__=' + json.dumps(uris) + ';</script>\n<script>\n' + js + '\n</script>\n</body>')
+s = s.replace('</body>', '<script>window.__NO_SOUNDS__=' + json.dumps(uris) + ';window.__NO_CLIPS__=' + json.dumps(clips) + ';</script>\n<script>\n' + js + '\n</script>\n</body>')
 open(os.path.join(ROOT, 'NO-Button.html'), 'w').write(s)
 print('ok', len(files), 'precached; single file', os.path.getsize('NO-Button.html'))

@@ -4,8 +4,21 @@ import { StatusBar } from 'expo-status-bar';
 import { Audio } from 'expo-av';
 import * as Haptics from 'expo-haptics';
 import { Asset } from 'expo-asset';
+import * as Sharing from 'expo-sharing';
 
 // Web: preloaded HTMLAudioElements played synchronously inside the tap (required by iOS Safari).
+// Prefetched clip Files so navigator.share runs right inside the tap (Safari needs user activation).
+const clipUri = (i: number): string =>
+  (typeof window !== 'undefined' && (window as any).__NO_CLIPS__?.[i]) || Asset.fromModule(CLIPS[i]).uri;
+const clipFiles: Record<number, File> = {};
+const prefetchClip = (i: number) => {
+  if (clipFiles[i] || typeof fetch === 'undefined') return;
+  fetch(clipUri(i))
+    .then((r) => r.blob())
+    .then((b) => { clipFiles[i] = new File([b], `NO-${CLIP_NAMES[i]}.mp4`, { type: 'video/mp4' }); })
+    .catch(() => {});
+};
+
 const webAudio: any[] =
   Platform.OS === 'web' && typeof window !== 'undefined'
     ? [] : [];
@@ -25,6 +38,23 @@ const SOUNDS = [
   require('./assets/sounds/goat_scream.mp3'),
 ];
 
+// Shareable MP4 clip per voice, same order as SOUNDS.
+const CLIPS = [
+  require('./assets/clips/zombie.mp4'),
+  require('./assets/clips/demon.mp4'),
+  require('./assets/clips/banshee.mp4'),
+  require('./assets/clips/whisper_scream.mp4'),
+  require('./assets/clips/old_man.mp4'),
+  require('./assets/clips/creepy_girl.mp4'),
+  require('./assets/clips/monster_roar.mp4'),
+  require('./assets/clips/opera_diva.mp4'),
+  require('./assets/clips/chipmunk.mp4'),
+  require('./assets/clips/god_voice.mp4'),
+  require('./assets/clips/robot_overlord.mp4'),
+  require('./assets/clips/goat_scream.mp4'),
+];
+const CLIP_NAMES = ["zombie", "demon", "banshee", "whisper_scream", "old_man", "creepy_girl", "monster_roar", "opera_diva", "chipmunk", "god_voice", "robot_overlord", "goat_scream"];
+
 const CAPTIONS = [
   'Absolutely not.', 'Ask again and see.', 'Nope. Nope. Nope.', 'Hard pass.',
   'Not today, Satan.', 'The answer was always no.', 'Denied with prejudice.',
@@ -40,6 +70,8 @@ const pick = <T,>(a: T[]) => a[Math.floor(Math.random() * a.length)];
 
 export default function App() {
   const [count, setCount] = useState(0);
+  const [lastPlayed, setLastPlayed] = useState(-1);
+  const [shareMsg, setShareMsg] = useState('');
   const [caption, setCaption] = useState('Go ahead. Ask me anything.');
   const scale = useRef(new Animated.Value(1)).current;
   const shake = useRef(new Animated.Value(0)).current;
@@ -68,6 +100,7 @@ export default function App() {
     let i = Math.floor(Math.random() * (prev < 0 ? SOUNDS.length : SOUNDS.length - 1));
     if (prev >= 0 && i >= prev) i += 1;
     lastIdx.current = i;
+    setLastPlayed(i);
     return i;
   };
 
@@ -79,6 +112,7 @@ export default function App() {
       a.currentTime = 0;
       a.volume = 1;
       a.play().catch(() => {});
+      prefetchClip(i);
       if ((navigator as any).vibrate) (navigator as any).vibrate([80, 40, 120]);
       return;
     }
@@ -87,6 +121,41 @@ export default function App() {
       const { sound } = await Audio.Sound.createAsync(SOUNDS[nextIdx()], { shouldPlay: true, volume: 1.0 });
       current.current = sound;
     } catch {}
+  };
+
+  const shareLast = async () => {
+    const i = lastPlayed;
+    if (i < 0) return;
+    const fileName = `NO-${CLIP_NAMES[i]}.mp4`;
+    try {
+      if (Platform.OS === 'web') {
+        const file =
+          clipFiles[i] ||
+          new File([await (await fetch(clipUri(i))).blob()], fileName, { type: 'video/mp4' });
+        const nav: any = navigator;
+        if (nav.canShare && nav.canShare({ files: [file] })) {
+          await nav.share({ files: [file], title: 'NO.', text: 'NO.' });
+          setShareMsg('Sent. They know now.');
+        } else {
+          const a = document.createElement('a');
+          a.href = URL.createObjectURL(file);
+          a.download = fileName;
+          document.body.appendChild(a);
+          a.click();
+          a.remove();
+          setTimeout(() => URL.revokeObjectURL(a.href), 10000);
+          setShareMsg('Downloaded ' + fileName);
+        }
+      } else {
+        const asset = Asset.fromModule(CLIPS[i]);
+        await asset.downloadAsync();
+        if (asset.localUri && (await Sharing.isAvailableAsync())) {
+          await Sharing.shareAsync(asset.localUri, { mimeType: 'video/mp4', UTI: 'public.mpeg-4', dialogTitle: 'Send this NO' });
+        }
+      }
+    } catch (e: any) {
+      if (e?.name !== 'AbortError') setShareMsg('Could not share. Still NO.');
+    }
   };
 
   const onPressIn = () => {
@@ -102,6 +171,7 @@ export default function App() {
     }
     setCount((c) => c + 1);
     setCaption(pick(CAPTIONS));
+    setShareMsg('');
     shake.setValue(0);
     Animated.sequence(
       [14, -14, 10, -10, 6, -6, 0].map((v) =>
@@ -128,6 +198,12 @@ export default function App() {
         </View>
       </Pressable>
       <Text style={styles.caption}>{caption}</Text>
+      {lastPlayed >= 0 && (
+        <Pressable onPress={shareLast} accessibilityRole="button" accessibilityLabel="Send this NO" style={styles.share}>
+          <Text style={styles.shareText}>Send this NO 📤</Text>
+        </Pressable>
+      )}
+      {!!shareMsg && <Text style={styles.shareMsg}>{shareMsg}</Text>}
     </Animated.View>
   );
 }
@@ -155,5 +231,8 @@ const styles = StyleSheet.create({
     color: '#fff', fontSize: 110, fontWeight: '900', letterSpacing: 4,
     textShadowColor: 'rgba(0,0,0,0.45)', textShadowOffset: { width: 0, height: 5 }, textShadowRadius: 6,
   },
+  share: { marginTop: 28, backgroundColor: '#2a2a2a', borderRadius: 30, paddingVertical: 14, paddingHorizontal: 26, borderWidth: 2, borderColor: '#d10f0f' },
+  shareText: { color: '#fff', fontSize: 18, fontWeight: '800' },
+  shareMsg: { color: '#999', fontSize: 14, marginTop: 10 },
   caption: { color: '#fff', fontSize: 24, fontWeight: '800', marginTop: 50, textAlign: 'center', paddingHorizontal: 30 },
 });
